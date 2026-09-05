@@ -18,7 +18,11 @@ class LocationSerializer(serializers.ModelSerializer):
     )
     author = serializers.ReadOnlyField(source='author.username')
     author_id = serializers.ReadOnlyField(source='author.id')
-    views_count = serializers.SerializerMethodField()
+    avg_rating = serializers.FloatField(read_only=True, default=0.0)
+    reviews_count = serializers.IntegerField(read_only=True, default=0)
+    views_7d = serializers.IntegerField(read_only=True, default=0)
+    views_count = serializers.IntegerField(read_only=True, default=0)
+    popularity_score = serializers.FloatField(read_only=True, default=0.0)
 
     class Meta:
         model = Location
@@ -33,14 +37,25 @@ class LocationSerializer(serializers.ModelSerializer):
             'category_id',
             'author',
             'author_id',
+            'avg_rating',
+            'reviews_count',
+            'views_7d',
             'views_count',
+            'popularity_score',
             'created_at',
             'updated_at',
         )
-        read_only_fields = ('id', 'author', 'author_id', 'views_count', 'created_at', 'updated_at')
+        read_only_fields = (
+            'id',
+            'author',
+            'author_id',
+            'avg_rating',
+            'reviews_count',
+            'views_7d',
+            'views_count',
+            'popularity_score',
+            'created_at',
+            'updated_at',
+        )
 
-    def get_views_count(self, obj: Location) -> int:
-        if hasattr(obj, 'views_count'):
-            return obj.views_count
-        return obj.views.count()
 

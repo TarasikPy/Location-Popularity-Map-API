@@ -1,6 +1,10 @@
+import hashlib
+from urllib.parse import urlencode
+from django.core.cache import cache
 from django.http import HttpRequest
 from apps.common.redis import get_redis_client, set_rate_limit_nx
 from apps.locations.models import Location, LocationView
+
 
 
 def get_client_ip(request: HttpRequest) -> str:
@@ -32,3 +36,19 @@ def record_location_view(location: Location, request: HttpRequest) -> bool:
         ip_address=ip_address,
     )
     return True
+
+
+LOCATIONS_CACHE_PREFIX = 'locations:list'
+LOCATIONS_CACHE_TTL = 3600
+
+
+def get_locations_cache_key(query_params: dict) -> str:
+    sorted_items = sorted((k, str(v)) for k, v in query_params.items())
+    encoded = urlencode(sorted_items)
+    param_hash = hashlib.md5(encoded.encode('utf-8')).hexdigest()
+    return f"{LOCATIONS_CACHE_PREFIX}:{param_hash}"
+
+
+def invalidate_locations_cache() -> None:
+    cache.delete_pattern(f"{LOCATIONS_CACHE_PREFIX}:*")
+
