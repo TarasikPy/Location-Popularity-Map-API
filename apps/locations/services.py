@@ -1,9 +1,11 @@
 import hashlib
 from urllib.parse import urlencode
+import pandas as pd
 from django.core.cache import cache
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 from apps.common.redis import get_redis_client, set_rate_limit_nx
 from apps.locations.models import Location, LocationView
+
 
 
 
@@ -51,4 +53,57 @@ def get_locations_cache_key(query_params: dict) -> str:
 
 def invalidate_locations_cache() -> None:
     cache.delete_pattern(f"{LOCATIONS_CACHE_PREFIX}:*")
+
+
+def export_locations_to_csv(queryset) -> HttpResponse:
+    data = [
+        {
+            'id': loc.id,
+            'name': loc.name,
+            'category': loc.category.name if loc.category else '',
+            'author': loc.author.username if loc.author else '',
+            'avg_rating': round(getattr(loc, 'avg_rating', 0.0), 2),
+            'reviews_count': getattr(loc, 'reviews_count', 0),
+            'views_7d': getattr(loc, 'views_7d', 0),
+            'views_count': getattr(loc, 'views_count', 0),
+            'popularity_score': round(getattr(loc, 'popularity_score', 0.0), 2),
+            'latitude': str(loc.latitude) if loc.latitude is not None else '',
+            'longitude': str(loc.longitude) if loc.longitude is not None else '',
+            'address': loc.address,
+            'created_at': loc.created_at.isoformat() if loc.created_at else '',
+        }
+        for loc in queryset
+    ]
+    df = pd.DataFrame(data)
+    csv_data = df.to_csv(index=False)
+    response = HttpResponse(csv_data, content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="locations.csv"'
+    return response
+
+
+def export_locations_to_json(queryset) -> HttpResponse:
+    data = [
+        {
+            'id': loc.id,
+            'name': loc.name,
+            'category': loc.category.name if loc.category else '',
+            'author': loc.author.username if loc.author else '',
+            'avg_rating': round(getattr(loc, 'avg_rating', 0.0), 2),
+            'reviews_count': getattr(loc, 'reviews_count', 0),
+            'views_7d': getattr(loc, 'views_7d', 0),
+            'views_count': getattr(loc, 'views_count', 0),
+            'popularity_score': round(getattr(loc, 'popularity_score', 0.0), 2),
+            'latitude': str(loc.latitude) if loc.latitude is not None else '',
+            'longitude': str(loc.longitude) if loc.longitude is not None else '',
+            'address': loc.address,
+            'created_at': loc.created_at.isoformat() if loc.created_at else '',
+        }
+        for loc in queryset
+    ]
+    df = pd.DataFrame(data)
+    json_data = df.to_json(orient='records', indent=2, force_ascii=False)
+    response = HttpResponse(json_data, content_type='application/json; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="locations.json"'
+    return response
+
 
