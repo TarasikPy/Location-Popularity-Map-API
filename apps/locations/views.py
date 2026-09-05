@@ -1,6 +1,7 @@
 from django.core.cache import cache
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
@@ -10,9 +11,12 @@ from apps.locations.models import Category, Location
 from apps.locations.serializers import CategorySerializer, LocationSerializer
 from apps.locations.services import (
     LOCATIONS_CACHE_TTL,
+    export_locations_to_csv,
+    export_locations_to_json,
     get_locations_cache_key,
     record_location_view,
 )
+
 
 
 @extend_schema_view(
@@ -87,5 +91,26 @@ class LocationViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance: Location) -> None:
         instance.delete()
+
+    @extend_schema(
+        tags=['Locations'],
+        summary='Export locations list as CSV (pandas)',
+        responses={(200, 'text/csv'): OpenApiResponse(description='CSV file download')},
+    )
+    @action(detail=False, methods=['get'], url_path='export/csv')
+    def export_csv(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        return export_locations_to_csv(queryset)
+
+    @extend_schema(
+        tags=['Locations'],
+        summary='Export locations list as JSON (pandas)',
+        responses={(200, 'application/json'): OpenApiResponse(description='JSON file download')},
+    )
+    @action(detail=False, methods=['get'], url_path='export/json')
+    def export_json(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        return export_locations_to_json(queryset)
+
 
 

@@ -1,5 +1,5 @@
 from django.db.models import Count, Q
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -9,6 +9,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from apps.common.permissions import IsAuthorOrReadOnly
 from apps.reviews.models import Review, ReviewReaction
 from apps.reviews.serializers import ReviewReactionSerializer, ReviewSerializer
+from apps.reviews.services import export_reviews_to_csv, export_reviews_to_json
+
 
 
 @extend_schema_view(
@@ -68,3 +70,24 @@ class ReviewViewSet(viewsets.ModelViewSet):
         review = self.get_object()
         ReviewReaction.objects.filter(review=review, user=request.user).delete()
         return Response({'detail': 'Reaction removed.'}, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        tags=['Reviews'],
+        summary='Export reviews list as CSV (pandas)',
+        responses={(200, 'text/csv'): OpenApiResponse(description='CSV file download')},
+    )
+    @action(detail=False, methods=['get'], url_path='export/csv')
+    def export_csv(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        return export_reviews_to_csv(queryset)
+
+    @extend_schema(
+        tags=['Reviews'],
+        summary='Export reviews list as JSON (pandas)',
+        responses={(200, 'application/json'): OpenApiResponse(description='JSON file download')},
+    )
+    @action(detail=False, methods=['get'], url_path='export/json')
+    def export_json(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        return export_reviews_to_json(queryset)
+
