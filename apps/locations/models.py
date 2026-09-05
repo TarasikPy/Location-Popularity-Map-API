@@ -2,6 +2,8 @@ from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
 from apps.common.models import SoftDeleteModel, TimeStampedModel
+from apps.locations.managers import LocationManager
+
 
 
 class Category(SoftDeleteModel, TimeStampedModel):
@@ -40,7 +42,10 @@ class Location(SoftDeleteModel, TimeStampedModel):
         related_name='locations',
     )
 
+    objects = LocationManager()
+
     class Meta:
+
         verbose_name = 'Location'
         verbose_name_plural = 'Locations'
         ordering = ['-created_at']
