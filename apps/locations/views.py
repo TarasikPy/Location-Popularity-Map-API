@@ -1,11 +1,14 @@
+from django.db.models import Count
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
+from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
 from apps.common.permissions import IsAdminOrReadOnly, IsAuthorOrReadOnly
 from apps.locations.filters import LocationFilter
 from apps.locations.models import Category, Location
 from apps.locations.serializers import CategorySerializer, LocationSerializer
+from apps.locations.services import record_location_view
 
 
 @extend_schema_view(
@@ -34,7 +37,6 @@ class CategoryViewSet(viewsets.ModelViewSet):
     destroy=extend_schema(tags=['Locations'], summary='Soft-delete location (Author or Admin only)'),
 )
 class LocationViewSet(viewsets.ModelViewSet):
-    queryset = Location.objects.select_related('category', 'author').all()
     serializer_class = LocationSerializer
     permission_classes = [IsAuthorOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -42,8 +44,23 @@ class LocationViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'description', 'address']
     ordering_fields = ['created_at', 'name']
 
+    def get_queryset(self):
+        return Location.objects.select_related('category', 'author').annotate(
+            views_count=Count('views', distinct=True),
+        ).order_by('-created_at')
+
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        is_new_view = record_location_view(instance, request)
+        if is_new_view and hasattr(instance, 'views_count'):
+            instance.views_count += 1
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
     def perform_create(self, serializer: LocationSerializer) -> None:
         serializer.save(author=self.request.user)
 
     def perform_destroy(self, instance: Location) -> None:
         instance.delete()
+

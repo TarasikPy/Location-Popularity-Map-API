@@ -47,3 +47,31 @@ class Location(SoftDeleteModel, TimeStampedModel):
 
     def __str__(self) -> str:
         return self.name
+
+
+class LocationView(models.Model):
+    location = models.ForeignKey(
+        Location,
+        on_delete=models.CASCADE,
+        related_name='views',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='location_views',
+    )
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = 'Location View'
+        verbose_name_plural = 'Location Views'
+        indexes = [
+            models.Index(fields=['location', 'created_at']),
+        ]
+
+    def __str__(self) -> str:
+        return f"View for {self.location_id} at {self.created_at}"
+
