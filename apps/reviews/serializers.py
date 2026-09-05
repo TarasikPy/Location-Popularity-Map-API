@@ -20,6 +20,11 @@ class ReviewSerializer(serializers.ModelSerializer):
     dislikes_count = serializers.IntegerField(read_only=True, default=0)
     user_reaction = serializers.SerializerMethodField()
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance is not None:
+            self.fields['location_id'].read_only = True
+
     class Meta:
         model = Review
         fields = (
@@ -37,6 +42,8 @@ class ReviewSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             'id',
+            'location',
+            'location_id',
             'author',
             'author_id',
             'likes_count',

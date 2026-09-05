@@ -7,7 +7,7 @@ from apps.locations.managers import LocationManager
 
 
 class Category(SoftDeleteModel, TimeStampedModel):
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=100)
     slug = models.SlugField(max_length=120, unique=True, blank=True)
     description = models.TextField(blank=True)
 
@@ -15,6 +15,13 @@ class Category(SoftDeleteModel, TimeStampedModel):
         verbose_name = 'Category'
         verbose_name_plural = 'Categories'
         ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['name'],
+                condition=models.Q(is_deleted=False),
+                name='unique_active_category_name',
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.name
