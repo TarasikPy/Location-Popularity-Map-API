@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from apps.locations.models import Category, Location
+from apps.locations.models import Category, Location, LocationSubscription
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -23,6 +23,7 @@ class LocationSerializer(serializers.ModelSerializer):
     views_7d = serializers.IntegerField(read_only=True, default=0)
     views_count = serializers.IntegerField(read_only=True, default=0)
     popularity_score = serializers.FloatField(read_only=True, default=0.0)
+    is_subscribed = serializers.SerializerMethodField()
 
     class Meta:
         model = Location
@@ -42,6 +43,7 @@ class LocationSerializer(serializers.ModelSerializer):
             'views_7d',
             'views_count',
             'popularity_score',
+            'is_subscribed',
             'created_at',
             'updated_at',
         )
@@ -54,8 +56,27 @@ class LocationSerializer(serializers.ModelSerializer):
             'views_7d',
             'views_count',
             'popularity_score',
+            'is_subscribed',
             'created_at',
             'updated_at',
         )
+
+    def get_is_subscribed(self, obj: Location) -> bool:
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        return obj.subscriptions.filter(user=request.user).exists()
+
+
+class LocationSubscriptionSerializer(serializers.ModelSerializer):
+    user = serializers.ReadOnlyField(source='user.username')
+    user_id = serializers.ReadOnlyField(source='user.id')
+    location_name = serializers.ReadOnlyField(source='location.name')
+    location_id = serializers.ReadOnlyField(source='location.id')
+
+    class Meta:
+        model = LocationSubscription
+        fields = ('id', 'location_id', 'location_name', 'user_id', 'user', 'created_at')
+        read_only_fields = ('id', 'location_id', 'location_name', 'user_id', 'user', 'created_at')
 
 

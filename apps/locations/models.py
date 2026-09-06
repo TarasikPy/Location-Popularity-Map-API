@@ -87,3 +87,29 @@ class LocationView(models.Model):
     def __str__(self) -> str:
         return f"View for {self.location_id} at {self.created_at}"
 
+
+class LocationSubscription(TimeStampedModel):
+    location = models.ForeignKey(
+        Location,
+        on_delete=models.CASCADE,
+        related_name='subscriptions',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='location_subscriptions',
+    )
+
+    class Meta:
+        verbose_name = 'Location Subscription'
+        verbose_name_plural = 'Location Subscriptions'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['location', 'user'],
+                name='unique_user_location_subscription',
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"Subscription of {self.user_id} to {self.location_id}"
+

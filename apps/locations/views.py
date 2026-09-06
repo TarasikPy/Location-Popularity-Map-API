@@ -1,13 +1,15 @@
 from django.core.cache import cache
 from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
-from rest_framework import filters, viewsets
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
+from apps.common.pagination import StandardResultsSetPagination
 from apps.common.permissions import IsAdminOrReadOnly, IsAuthorOrReadOnly
 from apps.locations.filters import LocationFilter
-from apps.locations.models import Category, Location
+from apps.locations.models import Category, Location, LocationSubscription
 from apps.locations.serializers import CategorySerializer, LocationSerializer
 from apps.locations.services import (
     LOCATIONS_CACHE_TTL,
@@ -31,6 +33,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [IsAdminOrReadOnly]
+    pagination_class = StandardResultsSetPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'description']
     ordering_fields = ['name', 'created_at']
@@ -47,6 +50,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
 class LocationViewSet(viewsets.ModelViewSet):
     serializer_class = LocationSerializer
     permission_classes = [IsAuthorOrReadOnly]
+    pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = LocationFilter
     search_fields = ['name', 'description', 'address']
@@ -91,6 +95,38 @@ class LocationViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance: Location) -> None:
         instance.delete()
+
+    @extend_schema(
+        tags=['Locations'],
+        summary='Subscribe to location updates and new reviews',
+        responses={200: OpenApiResponse(description='Subscribed successfully')},
+    )
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def subscribe(self, request, pk=None):
+        location = self.get_object()
+        subscription, created = LocationSubscription.objects.get_or_create(
+            location=location,
+            user=request.user,
+        )
+        msg = 'Subscribed to location updates.' if created else 'Already subscribed to location updates.'
+        return Response({'detail': msg, 'is_subscribed': True}, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        tags=['Locations'],
+        summary='Unsubscribe from location updates',
+        responses={200: OpenApiResponse(description='Unsubscribed successfully')},
+    )
+    @subscribe.mapping.delete
+    def unsubscribe(self, request, pk=None):
+        location = self.get_object()
+        LocationSubscription.objects.filter(
+            location=location,
+            user=request.user,
+        ).delete()
+        return Response(
+            {'detail': 'Unsubscribed from location updates.', 'is_subscribed': False},
+            status=status.HTTP_200_OK,
+        )
 
     @extend_schema(
         tags=['Locations'],

@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
+from apps.common.pagination import StandardResultsSetPagination
 from apps.common.permissions import IsAuthorOrReadOnly
 from apps.reviews.models import Review, ReviewReaction
 from apps.reviews.serializers import ReviewReactionSerializer, ReviewSerializer
@@ -24,6 +25,7 @@ from apps.reviews.services import export_reviews_to_csv, export_reviews_to_json
 class ReviewViewSet(viewsets.ModelViewSet):
     serializer_class = ReviewSerializer
     permission_classes = [IsAuthorOrReadOnly]
+    pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['location', 'rating']
     ordering_fields = ['created_at', 'rating', 'likes_count']
