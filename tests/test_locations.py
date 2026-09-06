@@ -4,7 +4,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.locations.models import Category, Location
+from apps.locations.models import Category, Location, LocationSubscription
+from apps.reviews.models import Review
 
 User = get_user_model()
 
@@ -136,3 +137,79 @@ def test_location_category_filtering(api_client, author):
     assert resp.status_code == status.HTTP_200_OK
     assert resp.data['count'] == 1
     assert resp.data['results'][0]['name'] == 'Park 1'
+
+
+@pytest.mark.django_db
+def test_location_author_and_rating_filtering(api_client, author, other_user, category):
+    loc1 = Location.objects.create(name='Loc 1', category=category, author=author)
+    loc2 = Location.objects.create(name='Loc 2', category=category, author=other_user)
+
+    Review.objects.create(location=loc1, author=author, rating=5, text='Great')
+    Review.objects.create(location=loc2, author=other_user, rating=2, text='Poor')
+
+    # Filter by author ID
+    resp_author_id = api_client.get(reverse('location-list'), {'author': author.id})
+    assert resp_author_id.status_code == status.HTTP_200_OK
+    assert resp_author_id.data['count'] == 1
+    assert resp_author_id.data['results'][0]['id'] == loc1.id
+
+    # Filter by author username
+    resp_author_name = api_client.get(reverse('location-list'), {'author_username': 'other'})
+    assert resp_author_name.status_code == status.HTTP_200_OK
+    assert resp_author_name.data['count'] == 1
+    assert resp_author_name.data['results'][0]['id'] == loc2.id
+
+    # Filter by min_rating
+    resp_min_rating = api_client.get(reverse('location-list'), {'min_rating': 4})
+    assert resp_min_rating.status_code == status.HTTP_200_OK
+    assert resp_min_rating.data['count'] == 1
+    assert resp_min_rating.data['results'][0]['id'] == loc1.id
+
+    # Filter by max_rating
+    resp_max_rating = api_client.get(reverse('location-list'), {'max_rating': 3})
+    assert resp_max_rating.status_code == status.HTTP_200_OK
+    assert resp_max_rating.data['count'] == 1
+    assert resp_max_rating.data['results'][0]['id'] == loc2.id
+
+
+@pytest.mark.django_db
+def test_location_subscription_and_unsubscription(api_client, author, other_user, location):
+    sub_url = reverse('location-subscribe', kwargs={'pk': location.pk})
+
+    # Anonymous cannot subscribe
+    anon_resp = api_client.post(sub_url)
+    assert anon_resp.status_code == status.HTTP_403_FORBIDDEN
+
+    # Authenticated user subscribes
+    api_client.force_login(other_user)
+    resp_sub = api_client.post(sub_url)
+    assert resp_sub.status_code == status.HTTP_200_OK
+    assert resp_sub.data['is_subscribed'] is True
+    assert LocationSubscription.objects.filter(location=location, user=other_user).exists()
+
+    # Detail view reflects is_subscribed
+    detail_url = reverse('location-detail', kwargs={'pk': location.pk})
+    detail_resp = api_client.get(detail_url)
+    assert detail_resp.data['is_subscribed'] is True
+
+    # Subscribing again is idempotent
+    resp_sub_dup = api_client.post(sub_url)
+    assert resp_sub_dup.status_code == status.HTTP_200_OK
+    assert LocationSubscription.objects.filter(location=location, user=other_user).count() == 1
+
+    # Unsubscribe
+    resp_unsub = api_client.delete(sub_url)
+    assert resp_unsub.status_code == status.HTTP_200_OK
+    assert resp_unsub.data['is_subscribed'] is False
+    assert LocationSubscription.objects.filter(location=location, user=other_user).count() == 0
+
+
+@pytest.mark.django_db
+def test_pagination_page_size(api_client, author, category):
+    for i in range(5):
+        Location.objects.create(name=f'Park {i}', category=category, author=author)
+
+    resp = api_client.get(reverse('location-list'), {'page_size': 2})
+    assert resp.status_code == status.HTTP_200_OK
+    assert len(resp.data['results']) == 2
+    assert resp.data['count'] == 5

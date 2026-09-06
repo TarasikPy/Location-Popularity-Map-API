@@ -1,10 +1,11 @@
 import pytest
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.locations.models import Category, Location
+from apps.locations.models import Category, Location, LocationSubscription
 from apps.reviews.models import Review, ReviewReaction
 
 User = get_user_model()
@@ -147,3 +148,36 @@ def test_review_reactions_like_dislike(api_client, user1, user2, location):
     assert resp_detail3.data['likes_count'] == 0
     assert resp_detail3.data['dislikes_count'] == 0
     assert resp_detail3.data['user_reaction'] is None
+
+
+@pytest.mark.django_db
+def test_review_creation_notifies_author_and_subscribers(api_client, user1, user2, location):
+    # Set email for author
+    location.author.email = 'author@location.test'
+    location.author.save()
+
+    # Create a subscriber user3
+    user3 = User.objects.create_user(username='user3', email='subscriber@test.com', password='Password123!')
+    LocationSubscription.objects.create(location=location, user=user3)
+
+    # Clear outbox
+    mail.outbox.clear()
+
+    # User2 posts a review
+    api_client.force_login(user2)
+    resp = api_client.post(reverse('review-list'), data={
+        'location_id': location.id,
+        'rating': 5,
+        'text': 'Spectacular place!',
+    })
+    assert resp.status_code == status.HTTP_201_CREATED
+
+    # Verify emails dispatched: 1 to location author, 1 to subscriber
+    assert len(mail.outbox) == 2
+    recipients = [m.to[0] for m in mail.outbox]
+    assert 'author@location.test' in recipients
+    assert 'subscriber@test.com' in recipients
+
+    author_mail = next(m for m in mail.outbox if m.to[0] == 'author@location.test')
+    assert 'New review for your location' in author_mail.subject
+    assert 'Spectacular place!' in author_mail.body
